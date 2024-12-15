@@ -4,22 +4,29 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"go_final_project/db" // Пакет для работы с базой данных
 )
 
 func main() {
 	// Указываем директорию для файлов фронтенда
 	webDir := "./web"
 
-	// Создаём файловый сервер
+	// Создаём файловый сервер с маршрутами
 	fileServer := http.FileServer(http.Dir(webDir))
-
-	// Регистрируем маршруты
 	http.Handle("/", fileServer)
 
-	// Получаем порт из переменной окружения или используем порт по умолчанию
+	// Получаем порт из переменной окружения (со звёздочкой) или используем порт по умолчанию
 	port := os.Getenv("TODO_PORT")
 	if port == "" {
 		port = "7540" // Порт по умолчанию
+	}
+
+	// Проверяем базу данных и создаём её при необходимости
+	dbFile := db.GetDatabasePath() // Путь к базе данных
+	err := db.SetupDatabase(dbFile)
+	if err != nil {
+		log.Fatalf("Error with database: %v", err)
 	}
 
 	// Запускаем сервер
