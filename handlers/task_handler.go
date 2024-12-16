@@ -8,16 +8,9 @@ import (
 	"time"
 
 	"go_final_project/db"
+	"go_final_project/models"
 	"go_final_project/utils"
 )
-
-// Task структура для задачи
-type Task struct {
-	Date    string `json:"date"`
-	Title   string `json:"title"`
-	Comment string `json:"comment"`
-	Repeat  string `json:"repeat"`
-}
 
 // HandleTask обрабатывает запросы API для задач
 func HandleTask(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +28,7 @@ func addTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	// Парсим JSON из тела запроса
-	var task Task
+	var task models.Task
 	err := json.NewDecoder(r.Body).Decode(&task)
 	if err != nil {
 		writeError(w, "Invalid JSON format")
