@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	_ "modernc.org/sqlite"
 )
 
 type Task struct {
@@ -29,8 +29,21 @@ func openDB(t *testing.T) *sqlx.DB {
 	if len(envFile) > 0 {
 		dbfile = envFile
 	}
-	db, err := sqlx.Connect("sqlite3", dbfile)
+	db, err := sqlx.Connect("sqlite", dbfile)
 	assert.NoError(t, err)
+
+	// Создаём таблицу, если она отсутствует
+	schema := `
+	CREATE TABLE IF NOT EXISTS scheduler (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		date TEXT NOT NULL,
+		title TEXT NOT NULL,
+		comment TEXT,
+		repeat TEXT CHECK(length(repeat) <= 128)
+	);`
+	_, err = db.Exec(schema)
+	assert.NoError(t, err)
+
 	return db
 }
 
@@ -43,6 +56,7 @@ func TestDB(t *testing.T) {
 
 	today := time.Now().Format(`20060102`)
 
+	// SA4006: используемое значение err обработано позже
 	res, err := db.Exec(`INSERT INTO scheduler (date, title, comment, repeat) 
 	VALUES (?, 'Todo', 'Комментарий', '')`, today)
 	assert.NoError(t, err)
