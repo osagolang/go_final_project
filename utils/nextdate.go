@@ -9,6 +9,7 @@ import (
 )
 
 // NextDate вычисляет следующую дату для задачи на основе правил повторения.
+// Звёздочки (правила w и m) не реализовал (пока).
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	// Парсим начальную дату
 	startDate, err := time.Parse("20060102", date)
