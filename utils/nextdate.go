@@ -54,3 +54,8 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		return "", errors.New("invalid or unsupported repeat rule")
 	}
 }
+
+// NormalizeDate возвращает дату без времени (только год, месяц и день).
+func NormalizeDate(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
