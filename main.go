@@ -15,9 +15,10 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir(webDir)))
 
 	// Устанавливаем маршруты
-	http.HandleFunc("/api/task", handlers.HandleTask)      // Для добавления задачи
-	http.HandleFunc("/api/nextdate", handlers.HandleDate)  // Для расчёта следующей даты
-	http.HandleFunc("/api/tasks", handlers.HandleTaskList) // Для списка задач
+	http.HandleFunc("/api/task", handlers.HandleTask)          // Для действий с задачами
+	http.HandleFunc("/api/nextdate", handlers.HandleDate)      // Для расчёта следующей даты
+	http.HandleFunc("/api/tasks", handlers.HandleTaskList)     // Для списка задач
+	http.HandleFunc("/api/task/done", handlers.HandleTaskDone) //Для завершения задачи
 
 	// Получаем порт из переменной окружения (Задача со звёздочкой)
 	port := os.Getenv("TODO_PORT")

@@ -22,6 +22,8 @@ func HandleTask(w http.ResponseWriter, r *http.Request) {
 		getTask(w, r)
 	case http.MethodPut:
 		editTask(w, r)
+	case http.MethodDelete:
+		deleteTask(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -193,6 +195,108 @@ func editTask(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		writeError(w, "Ошибка при обновлении задачи")
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+		writeError(w, "Ошибка при отправке ответа")
+	}
+}
+
+// HandleTaskDone завершает задачу
+func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, "Не указан идентификатор задачи")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		writeError(w, "Идентификатор задачи должен быть числом")
+		return
+	}
+
+	dbFile := db.GetDatabasePath()
+	dbConn, err := sql.Open("sqlite", dbFile)
+	if err != nil {
+		writeError(w, "Не удалось подключиться к базе данных")
+		return
+	}
+	defer dbConn.Close()
+
+	var task models.Task
+	row := dbConn.QueryRow(
+		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
+		taskID,
+	)
+
+	var taskIDStr int64
+	err = row.Scan(&taskIDStr, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, "Задача не найдена")
+			return
+		}
+		writeError(w, "Ошибка при получении задачи")
+		return
+	}
+
+	if task.Repeat == "" {
+		_, err = dbConn.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+		if err != nil {
+			writeError(w, "Не удалось удалить задачу")
+			return
+		}
+	} else {
+		now := utils.NormalizeDate(time.Now())
+		nextDate, err := utils.NextDate(now, task.Date, task.Repeat)
+		if err != nil {
+			writeError(w, "Ошибка при расчёте следующей даты")
+			return
+		}
+
+		_, err = dbConn.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, taskID)
+		if err != nil {
+			writeError(w, "Не удалось обновить задачу")
+			return
+		}
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
+		writeError(w, "Ошибка при отправке ответа")
+	}
+}
+
+// deleteTask удаляет задачу по идентификатору
+func deleteTask(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, "Не указан идентификатор задачи")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		writeError(w, "Идентификатор задачи должен быть числом")
+		return
+	}
+
+	dbFile := db.GetDatabasePath()
+	dbConn, err := sql.Open("sqlite", dbFile)
+	if err != nil {
+		writeError(w, "Не удалось подключиться к базе данных")
+		return
+	}
+	defer dbConn.Close()
+
+	_, err = dbConn.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+	if err != nil {
+		writeError(w, "Не удалось удалить задачу")
 		return
 	}
 
