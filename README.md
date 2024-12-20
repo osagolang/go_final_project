@@ -47,3 +47,33 @@
 P.S. Кто-то там в чатах подпрыгивал про курс, но это молодеж. Им можно. У них все впереди)))
 P.P.S. Но при этом в тех же чатах было и много подсказок и объяснений по тем или иным задачам на протяжении всего курса.
 P.P.P.S. Отправлять на ревью буду пиар, надеюсь ничего там не перемудрил и все что делал должно быть видно.
+
+4. Как запустить, настроить и протестировать приложение
+
+- клонировать проект
+- из корневой папки /go_final_project запустить сервер go run main.go
+- в браузере открыть http://localhost:7540/
+- вуаля, можно взаимодействовать с задачами (создавать, редактировать, завершать, удалять)
+
+Настройки находятся в tests/settings.go
+
+var Port = 7540
+var DBFile = "../scheduler.db"
+var FullNextDate = false
+var Search = false
+var Token = ``
+
+Запуск тестов (из корневой папки /go_final_project)
+# запуск всех тестов
+- go test ./tests
+
+# запуск всех тестов с подробным выводом
+- go test -v ./tests
+
+# запуск пошаговых тестов
+- go test -run ^TestNextDate$ ./tests
+- go test -run ^TestAddTask$ ./tests
+- go test -run ^TestTasks$ ./tests
+- go test -run ^TestEditTask$ ./tests
+- go test -run ^TestDone$ ./tests
+- go test -run ^TestDelTask$ ./tests

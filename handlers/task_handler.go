@@ -1,36 +1,36 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
+	"go_final_project/constants"
 	"go_final_project/db"
 	"go_final_project/models"
 	"go_final_project/utils"
 )
 
 // HandleTask обрабатывает запросы API для задач
-func HandleTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleTask(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		addTask(w, r)
+		h.addTask(w, r)
 	case http.MethodGet:
-		getTask(w, r)
+		h.getTask(w, r)
 	case http.MethodPut:
-		editTask(w, r)
+		h.editTask(w, r)
 	case http.MethodDelete:
-		deleteTask(w, r)
+		h.deleteTask(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// addTask добавляет задачу в базу данных
-func addTask(w http.ResponseWriter, r *http.Request) {
+// addTask добавляет задачу
+func (h *Handler) addTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	var task models.Task
@@ -43,9 +43,9 @@ func addTask(w http.ResponseWriter, r *http.Request) {
 	now := utils.NormalizeDate(time.Now())
 
 	if task.Date == "" {
-		task.Date = now.Format("20060102")
+		task.Date = now.Format(constants.DateFormat)
 	} else {
-		parsedDate, err := time.Parse("20060102", task.Date)
+		parsedDate, err := time.Parse(constants.DateFormat, task.Date)
 		if err != nil {
 			writeError(w, "Неверный формат даты (ожидается YYYYMMDD)")
 			return
@@ -53,7 +53,7 @@ func addTask(w http.ResponseWriter, r *http.Request) {
 
 		if parsedDate.Before(now) || parsedDate.Equal(now) {
 			if task.Repeat == "" {
-				task.Date = now.Format("20060102")
+				task.Date = now.Format(constants.DateFormat)
 			} else {
 				task.Date, err = utils.NextDate(now, task.Date, task.Repeat)
 				if err != nil {
@@ -69,7 +69,7 @@ func addTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := db.AddTask(task.Date, task.Title, task.Comment, task.Repeat)
+	id, err := db.AddTask(h.DB, task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		writeError(w, "Не удалось добавить задачу")
 		return
@@ -82,7 +82,7 @@ func addTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // getTask возвращает данные задачи по идентификатору
-func getTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	id := r.URL.Query().Get("id")
@@ -97,32 +97,11 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbFile := db.GetDatabasePath()
-	dbConn, err := sql.Open("sqlite", dbFile)
+	task, err := db.GetTaskByID(h.DB, taskID)
 	if err != nil {
-		writeError(w, "Не удалось подключиться к базе данных")
-		return
-	}
-	defer dbConn.Close()
-
-	var task models.Task
-	row := dbConn.QueryRow(
-		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
-		taskID,
-	)
-
-	var taskIDStr int64
-	err = row.Scan(&taskIDStr, &task.Date, &task.Title, &task.Comment, &task.Repeat)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			writeError(w, "Задача не найдена")
-			return
-		}
 		writeError(w, "Ошибка при получении задачи")
 		return
 	}
-
-	task.ID = strconv.FormatInt(taskIDStr, 10)
 
 	if err := json.NewEncoder(w).Encode(task); err != nil {
 		writeError(w, "Ошибка при формировании ответа")
@@ -130,7 +109,7 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // editTask обновляет параметры задачи
-func editTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) editTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	var task models.Task
@@ -145,12 +124,12 @@ func editTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if task.Date != "" {
-		if _, err := time.Parse("20060102", task.Date); err != nil {
+		if _, err := time.Parse(constants.DateFormat, task.Date); err != nil {
 			writeError(w, "Неверный формат даты (ожидается YYYYMMDD)")
 			return
 		}
 	} else {
-		task.Date = utils.NormalizeDate(time.Now()).Format("20060102")
+		task.Date = utils.NormalizeDate(time.Now()).Format(constants.DateFormat)
 	}
 
 	if task.Title == "" {
@@ -158,43 +137,9 @@ func editTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if task.Repeat != "" {
-		now := utils.NormalizeDate(time.Now())
-		_, err := utils.NextDate(now, task.Date, task.Repeat)
-		if err != nil {
-			writeError(w, "Некорректное правило повторения")
-			return
-		}
-	}
-
-	dbFile := db.GetDatabasePath()
-	dbConn, err := sql.Open("sqlite", dbFile)
-	if err != nil {
-		writeError(w, "Не удалось подключиться к базе данных")
-		return
-	}
-	defer dbConn.Close()
-
-	var existingTask models.Task
-	err = dbConn.QueryRow(
-		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
-		task.ID,
-	).Scan(&existingTask.ID, &existingTask.Date, &existingTask.Title, &existingTask.Comment, &existingTask.Repeat)
-
-	if err == sql.ErrNoRows {
-		writeError(w, "Задача не найдена")
-		return
-	} else if err != nil {
-		writeError(w, "Ошибка при поиске задачи")
-		return
-	}
-
-	_, err = dbConn.Exec(
-		"UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
-		task.Date, task.Title, task.Comment, task.Repeat, task.ID,
-	)
-	if err != nil {
-		writeError(w, "Ошибка при обновлении задачи")
+	rowsAffected, err := db.UpdateTask(h.DB, task)
+	if err != nil || rowsAffected == 0 {
+		writeError(w, "Задача не найдена или не удалось обновить")
 		return
 	}
 
@@ -204,7 +149,7 @@ func editTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleTaskDone завершает задачу
-func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	id := r.URL.Query().Get("id")
@@ -219,38 +164,22 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbFile := db.GetDatabasePath()
-	dbConn, err := sql.Open("sqlite", dbFile)
+	// Получаем задачу из базы данных
+	task, err := db.GetTaskByID(h.DB, taskID)
 	if err != nil {
-		writeError(w, "Не удалось подключиться к базе данных")
-		return
-	}
-	defer dbConn.Close()
-
-	var task models.Task
-	row := dbConn.QueryRow(
-		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
-		taskID,
-	)
-
-	var taskIDStr int64
-	err = row.Scan(&taskIDStr, &task.Date, &task.Title, &task.Comment, &task.Repeat)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			writeError(w, "Задача не найдена")
-			return
-		}
 		writeError(w, "Ошибка при получении задачи")
 		return
 	}
 
 	if task.Repeat == "" {
-		_, err = dbConn.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+		// Если задача одноразовая, удаляем её
+		_, err = db.DeleteTask(h.DB, taskID)
 		if err != nil {
 			writeError(w, "Не удалось удалить задачу")
 			return
 		}
 	} else {
+		// Если задача повторяющаяся, обновляем дату
 		now := utils.NormalizeDate(time.Now())
 		nextDate, err := utils.NextDate(now, task.Date, task.Repeat)
 		if err != nil {
@@ -258,7 +187,8 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = dbConn.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, taskID)
+		task.Date = nextDate
+		_, err = db.UpdateTask(h.DB, *task)
 		if err != nil {
 			writeError(w, "Не удалось обновить задачу")
 			return
@@ -271,7 +201,7 @@ func HandleTaskDone(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteTask удаляет задачу по идентификатору
-func deleteTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
 	id := r.URL.Query().Get("id")
@@ -286,17 +216,16 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbFile := db.GetDatabasePath()
-	dbConn, err := sql.Open("sqlite", dbFile)
-	if err != nil {
-		writeError(w, "Не удалось подключиться к базе данных")
-		return
-	}
-	defer dbConn.Close()
-
-	_, err = dbConn.Exec("DELETE FROM scheduler WHERE id = ?", taskID)
+	// Удаляем задачу из базы данных через db.DeleteTask
+	rowsAffected, err := db.DeleteTask(h.DB, taskID)
 	if err != nil {
 		writeError(w, "Не удалось удалить задачу")
+		return
+	}
+
+	// Проверяем, была ли удалена задача
+	if rowsAffected == 0 {
+		writeError(w, "Задача не найдена")
 		return
 	}
 

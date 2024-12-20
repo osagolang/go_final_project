@@ -3,9 +3,11 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"go_final_project/models"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	_ "modernc.org/sqlite" // Подключаем SQLite без CGO
 )
@@ -26,16 +28,7 @@ func GetDatabasePath() string {
 
 // SetupDatabase проверяет наличие файла базы данных и создаёт таблицу, если её нет.
 func SetupDatabase(dbFile string) error {
-	workingDir, err := os.Getwd()
-	if err != nil {
-		log.Printf("Failed to get working directory: %v", err)
-	} else {
-		log.Printf("Current working directory: %s", workingDir)
-	}
-
-	log.Printf("Database file path: %s", dbFile)
-
-	_, err = os.Stat(dbFile)
+	_, err := os.Stat(dbFile)
 	var install bool
 	if err != nil && os.IsNotExist(err) {
 		install = true
@@ -86,14 +79,7 @@ func createTable(db *sql.DB) error {
 }
 
 // AddTask добавляет новую задачу в таблицу scheduler и возвращает её ID.
-func AddTask(date, title, comment, repeat string) (int64, error) {
-	dbPath := GetDatabasePath()
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return 0, fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
+func AddTask(db *sql.DB, date, title, comment, repeat string) (int64, error) {
 	query := `
 		INSERT INTO scheduler (date, title, comment, repeat)
 		VALUES (?, ?, ?, ?)
@@ -111,4 +97,49 @@ func AddTask(date, title, comment, repeat string) (int64, error) {
 	}
 
 	return id, nil
+}
+
+// GetTaskByID возвращает данные задачи по её ID.
+func GetTaskByID(db *sql.DB, id int) (*models.Task, error) {
+	var task models.Task
+	row := db.QueryRow(
+		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
+		id,
+	)
+
+	var taskID int64
+	err := row.Scan(&taskID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("task not found")
+		}
+		return nil, err
+	}
+
+	task.ID = strconv.FormatInt(taskID, 10)
+	return &task, nil
+}
+
+// UpdateTask обновляет данные задачи.
+func UpdateTask(db *sql.DB, task models.Task) (int64, error) {
+	query := `
+		UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ?
+		WHERE id = ?
+	`
+	result, err := db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.ID)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
+}
+
+// DeleteTask удаляет задачу по её ID.
+func DeleteTask(db *sql.DB, id int) (int64, error) {
+	result, err := db.Exec("DELETE FROM scheduler WHERE id = ?", id)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected()
 }

@@ -1,14 +1,15 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
-	"go_final_project/db"
 	"go_final_project/models"
 )
+
+// Константа для лимита задач
+const DefaultTaskLimit = 50
 
 // TaskListResponse структура ответа со списком задач
 type TaskListResponse struct {
@@ -16,21 +17,12 @@ type TaskListResponse struct {
 }
 
 // HandleTaskList обрабатывает GET-запросы для получения списка задач
-func HandleTaskList(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleTaskList(w http.ResponseWriter, r *http.Request) {
 	// Устанавливаем заголовок JSON
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
-	// Подключаемся к базе данных
-	dbFile := db.GetDatabasePath()
-	dbConn, err := sql.Open("sqlite", dbFile)
-	if err != nil {
-		writeError(w, "Failed to connect to database")
-		return
-	}
-	defer dbConn.Close()
-
 	// Лимит задач (по умолчанию 50)
-	limit := 50
+	limit := DefaultTaskLimit
 	queryLimit := r.URL.Query().Get("limit")
 	if queryLimit != "" {
 		if parsedLimit, err := strconv.Atoi(queryLimit); err == nil && parsedLimit > 0 {
@@ -39,7 +31,7 @@ func HandleTaskList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Выполняем запрос к базе данных
-	rows, err := dbConn.Query(
+	rows, err := h.DB.Query(
 		"SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date LIMIT ?",
 		limit,
 	)
@@ -62,6 +54,12 @@ func HandleTaskList(w http.ResponseWriter, r *http.Request) {
 		// Преобразуем id в строку
 		task.ID = strconv.FormatInt(id, 10)
 		tasks = append(tasks, task)
+	}
+
+	// Обрабатываем ошибку после завершения итерации
+	if err := rows.Err(); err != nil {
+		writeError(w, "Error iterating over rows")
+		return
 	}
 
 	// Если задач нет, возвращаем пустой список

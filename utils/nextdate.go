@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"go_final_project/constants"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +13,7 @@ import (
 // Звёздочки (правила w и m) не реализовал (пока).
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 	// Парсим начальную дату
-	startDate, err := time.Parse("20060102", date)
+	startDate, err := time.Parse(constants.DateFormat, date)
 	if err != nil {
 		return "", fmt.Errorf("invalid date format: %s", date)
 	}
@@ -38,7 +39,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		// Вычисляем следующую дату
 		for nextDate := startDate.AddDate(0, 0, days); ; nextDate = nextDate.AddDate(0, 0, days) {
 			if nextDate.After(now) {
-				return nextDate.Format("20060102"), nil
+				return nextDate.Format(constants.DateFormat), nil
 			}
 		}
 
@@ -46,7 +47,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		// Правило "y"
 		for nextDate := startDate.AddDate(1, 0, 0); ; nextDate = nextDate.AddDate(1, 0, 0) {
 			if nextDate.After(now) {
-				return nextDate.Format("20060102"), nil
+				return nextDate.Format(constants.DateFormat), nil
 			}
 		}
 
